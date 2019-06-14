@@ -9,7 +9,17 @@ import matplotlib.pyplot as plot
 from os import listdir
 from os.path import isfile, join, exists
 
-effectiveRange = 600
+effectiveRange = 1500
+
+FORMAT = pyaudio.paInt16 # format of sampling 16 bit int
+CHANNELS = 1 # number of channels it means number of sample in every sampling
+RATE = 20000 # number of sample in 1 second sampling
+CHUNK = 1000 # length of every chunk
+RECORD_SECONDS = 0.2 # time of recording in seconds
+WAVE_OUTPUT_FILENAME = "file.wav" # file name
+TOTAL_RECORD_SECONDS = 2
+
+audio = pyaudio.PyAudio()
 
 def isSignalMortal(signal):
     section1 = 0
@@ -59,33 +69,54 @@ def recogniseYesNo(signal):
             else:
                 return True
 
-correctAnswers = 0
-trainingFilesDirectory = 'train/'
-trainingFiles = listdir(trainingFilesDirectory)
-index = 1
-for file in trainingFiles:
-    path = join(trainingFilesDirectory, file)
-    if isfile(path) and 'wav' in path:
-        rate, data = wav.read(path)
-        data = np.array(data,dtype='int')
-        FourierTransformOfData = np.fft.fft(data, 44100)
-        FourierTransformOfData[0] = 0
+last2SecondsData = []
+
+while (True):
+    # start Recording
+    stream = audio.open(format=FORMAT, channels=CHANNELS,
+                    rate=RATE, input=True,
+                    frames_per_buffer=CHUNK)
+    frames = []
+
+    for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
+        data = stream.read(CHUNK)
+        frames.append(data)
+
+    # stop Recording
+    stream.stop_stream()
+    stream.close()
+
+    # storing voice
+    waveFile = wave.open(WAVE_OUTPUT_FILENAME, 'wb')
+    waveFile.setnchannels(CHANNELS)
+    waveFile.setsampwidth(audio.get_sample_size(FORMAT))
+    waveFile.setframerate(RATE)
+    waveFile.writeframes(b''.join(frames))
+    waveFile.close()
+
+    rate, data = wav.read('file.wav')
+    if len(last2SecondsData) == TOTAL_RECORD_SECONDS * RATE:
+        last2SecondsData = last2SecondsData[len(data) - 1:-1]
+    last2SecondsData.extend(data)
+
+    if len(last2SecondsData) == TOTAL_RECORD_SECONDS * RATE:
+        FourierTransformOfData = np.fft.fft(data, int(TOTAL_RECORD_SECONDS * RATE))
+        # FourierTransformOfData[0] = 0
         for i in range(effectiveRange):
             FourierTransformOfData[i] = int(np.absolute(FourierTransformOfData[i]))
 
         limitedFourierTransformOfData = []
         for i in range(effectiveRange):
-            limitedFourierTransformOfData.append(FourierTransformOfData[i])
+            limitedFourierTransformOfData.append(np.real(FourierTransformOfData[i]))
 
-        word = ''.join([i for i in file[0:-5] if not i.isdigit()]) # Extract word from file name
         recognised = ""
-        if (recogniseYesNo(limitedFourierTransformOfData)):
-            recognised = "yes"
-        else:
-            recognised = "no"
-        if (recognised == word):
-            correctAnswers += 1
-        print('{}: \033[93m{}\033[0m -> \033[92m{}\033[0m -> {}'.format(index, path, word, recognised))
-        index += 1
 
-print ('Number of correct recognitions: {} ({}%)'.format(correctAnswers, (correctAnswers / (index - 1)) * 100))
+        if (np.average(limitedFourierTransformOfData) > 200000):
+            if (recogniseYesNo(limitedFourierTransformOfData)):
+                recognised = "yes"
+            else:
+                recognised = "no"
+            print("\033[93mListening:\033[0m",  "\033[92m{}\033[0m".format(recognised), "        ", end='\r')
+        else:
+            print("\033[93mListening: ...          \033[0m", end='\r')
+
