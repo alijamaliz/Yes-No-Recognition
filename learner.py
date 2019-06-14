@@ -5,19 +5,12 @@ from os.path import isfile, join, exists
 import numpy as np
 import matplotlib.pyplot as plot
 
+effectiveRange = 600
+
 def sumTwoArrays(first, second):
     res = []
-    smallArray = first
-    largeArray = second
-    if len(first) > len(second):
-        smallArray = second
-        largeArray = first
-    
-    for i in range(len(smallArray)):
-        res.append(smallArray[i] + largeArray[i])
-    
-    for i in range(len(largeArray) - len(smallArray)):
-        res.append(largeArray[len(smallArray) + i])
+    for i in range(effectiveRange):
+        res.append(first[i] + second[i])
     return res
 
 # Collect data from files
@@ -32,18 +25,22 @@ for file in trainingFiles:
         rate, data = wav.read(path)
         data = np.array(data,dtype='int')
         FourierTransformOfData = np.fft.fft(data, 44100)
-        for i in range(len(FourierTransformOfData)):
-            FourierTransformOfData[i] = int(np.absolute(FourierTransformOfData[i]))
-        word = ''.join([i for i in file[0:-5] if not i.isdigit()]) # Reeconize word
+        FourierTransformOfData[0] = 0
+
+        limitedFourierTransformOfData = []
+        for i in range(effectiveRange):
+            limitedFourierTransformOfData.append(int(np.absolute(FourierTransformOfData[i])))
+
+        word = ''.join([i for i in file[0:-5] if not i.isdigit()]) # Extract word from file name
         print('{}: \033[93m{}\033[0m -> \033[92m{}\033[0m'.format(index, path, word))
         index += 1
         if (word in sumOfAll):
             # The word is already in sumOfAll dictionary
-            sumOfAll[word] = sumTwoArrays(FourierTransformOfData, sumOfAll[word])
+            sumOfAll[word] = sumTwoArrays(limitedFourierTransformOfData, sumOfAll[word])
             countOfAll[word] += 1
             pass
         else:
-            sumOfAll[word] = FourierTransformOfData
+            sumOfAll[word] = limitedFourierTransformOfData
             countOfAll[word] = 1
 
 # Log all learned words
@@ -69,7 +66,7 @@ for word in knowledge.keys():
 
 p1 = []
 p2 = []
-for i in range(500):
+for i in range(effectiveRange):
     p1.append(knowledge['yes'][i])
     p2.append(knowledge['no'][i])
 plot.plot(p1, 'b', label='yes')
