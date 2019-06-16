@@ -54,23 +54,15 @@ def signalExtermasCount(signal):
     less = len(argrelextrema(np.asarray(limitedFourierTransformOfData), np.less)[0])
     return greater + less
 
-def recogniseYesNo(signal): 
-    if (isSignalMortal(signal)):
-        if (signalFirstPeakValue(signal) > 100000):
-            return True
-        else:
-            return False
+def recogniseYesNo(signal):
+    energy1 = energyOfSignal(signal[0:1000])
+    energy2 = energyOfSignal(signal[1000:-1])
+    if (energy1 / energy2 > 100):
+        return False
     else:
-        if (energyOfSignal(limitedFourierTransformOfData) > 10000000000): 
-            return False
-        else:
-            if (signalExtermasCount(limitedFourierTransformOfData) < 300):
-                return False
-            else:
-                return True
+        return True
 
 last2SecondsData = []
-
 while (True):
     # start Recording
     stream = audio.open(format=FORMAT, channels=CHANNELS,
@@ -119,4 +111,3 @@ while (True):
             print("\033[93mListening:\033[0m",  "\033[92m{}\033[0m".format(recognised), "        ", end='\r')
         else:
             print("\033[93mListening: ...          \033[0m", end='\r')
-
